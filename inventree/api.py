@@ -8,7 +8,7 @@ with the InvenTree database server.
 
 import requests
 from requests.auth import HTTPBasicAuth
-import os
+from urllib.parse import urljoin
 import json
 import logging
 
@@ -25,7 +25,7 @@ class InvenTreeAPI(object):
 
         Args:
             base_url - Base API URL
-            
+
         kwargs:
             username - Login username
             password - Login password
@@ -39,7 +39,7 @@ class InvenTreeAPI(object):
 
         # Server address *must* end with /api/
         if not base_url.endswith('/api/'):
-            base_url = os.path.join(base_url, 'api')
+            base_url = urljoin(base_url, 'api')
 
         if not base_url.endswith('/'):
             base_url += '/'
@@ -60,14 +60,14 @@ class InvenTreeAPI(object):
 
         # Basic authentication
         self.auth = HTTPBasicAuth(self.username, self.password)
-        
+
         if self.use_token_auth:
             if not self.token:
                 self.requestToken()
 
     def clean_url(self, url):
 
-        url = os.path.join(self.base_url, url)
+        url = urljoin(self.base_url, url)
 
         if not url.endswith('/'):
             url += '/'
@@ -123,8 +123,8 @@ class InvenTreeAPI(object):
         logging.info("Requesting auth token from server...")
 
         # Request an auth token from the server
-        token_url = os.path.join(self.base_url, 'user/token/')
-        
+        token_url = urljoin(self.base_url, 'user/token/')
+
         reply = requests.get(token_url, auth=self.auth)
 
         data = json.loads(reply.text)
@@ -155,36 +155,36 @@ class InvenTreeAPI(object):
         if url.startswith('/'):
             url = url[1:]
 
-        api_url = os.path.join(self.base_url, url)
+        api_url = urljoin(self.base_url, url)
 
         if not api_url.endswith('/'):
             api_url += '/'
 
-        method = kwargs.get('method', 'get')
+        method = kwargs.get('method', 'GET')
 
         params = kwargs.get('params', {})
 
-        json = kwargs.get('json', {})
+        json = kwargs.get('json')
 
         headers = kwargs.get('headers', {})
 
-        search_term = kwargs.get('search', None)
+        search_term = kwargs.get('search')
 
         if search_term is not None:
             params['search'] = search_term
 
         methods = {
-            'GET': requests.get,
-            'POST': requests.post,
-            'PUT': requests.put,
-            'DELETE': requests.delete,
+            'GET',
+            'POST',
+            'PUT',
+            'DELETE',
         }
 
-        if method.upper() not in methods.keys():
+        method = method.upper()
+
+        if method not in methods:
             logging.error("Unknown request method '{m}'".format(m=method))
             return None
-
-        method = method.upper()
 
         if self.use_token_auth and self.token:
             headers['AUTHORIZATION'] = 'Token {t}'.format(t=self.token)
@@ -200,7 +200,8 @@ class InvenTreeAPI(object):
         logging.debug(" - json:", json)
 
         try:
-            response = methods[method](
+            response = requests.request(
+                method,
                 api_url,
                 auth=auth,
                 params=params,
@@ -279,7 +280,7 @@ class InvenTreeAPI(object):
         if response.status_code not in [200, 201]:
             logging.error("POST request failed at '{url}' - {status}".format(url=url, status=response.status_code))
             logging.error(response.text)
-        
+
         try:
             data = json.loads(response.text)
         except json.decoder.JSONDecodeError:
@@ -306,7 +307,7 @@ class InvenTreeAPI(object):
 
         if response is None:
             return None
-        
+
         if response.status_code not in [200, 201]:
             logging.error("PUT request failed at '{url}' - {status}".format(url=url, status=response.status_code))
             return None
